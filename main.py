@@ -14,8 +14,16 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from app.database import get_db
-from app.models import User
-from app.schemas import UserCreate, UserRead, UserLogin
+from app.models import User, Calculation
+from app.schemas import (
+    UserCreate,
+    UserRead,
+    UserLogin,
+    CalculationCreate,
+    CalculationRead,
+)
+from app.calculation_factory import CalculationFactory
+from fastapi import Response
 from app.security import hash_password, verify_password
 
 # Setup logging
@@ -175,6 +183,80 @@ def login_user(
 
     return user
 
+
+@app.get("/calculations", response_model=list[CalculationRead])
+def browse_calculations(db: Session = Depends(get_db)):
+    return db.query(Calculation).order_by(Calculation.id).all()
+
+@app.get("/calculations/{id}", response_model=CalculationRead)
+def read_calculation(id: int, db: Session = Depends(get_db)):
+    calculation = db.get(Calculation, id)
+
+    if calculation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Calculation not found",
+        )
+
+    return calculation
+
+
+@app.post("/calculations", response_model=CalculationRead, status_code=201)
+def add_calculation(
+    data: CalculationCreate,
+    db: Session = Depends(get_db),
+):
+    calculation = CalculationFactory.create(data)
+
+    db.add(calculation)
+    db.commit()
+    db.refresh(calculation)
+
+    return calculation
+
+@app.put("/calculations/{id}", response_model=CalculationRead)
+def edit_calculation(
+    id: int,
+    data: CalculationCreate,
+    db: Session = Depends(get_db),
+):
+    calculation = db.get(Calculation, id)
+
+    if calculation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Calculation not found",
+        )
+
+    updated = CalculationFactory.create(data)
+
+    calculation.a = updated.a
+    calculation.b = updated.b
+    calculation.type = updated.type
+    calculation.result = updated.result
+
+    db.commit()
+    db.refresh(calculation)
+
+    return calculation
+
+@app.delete("/calculations/{id}", status_code=204)
+def delete_calculation(
+    id: int,
+    db: Session = Depends(get_db),
+):
+    calculation = db.get(Calculation, id)
+
+    if calculation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Calculation not found",
+        )
+
+    db.delete(calculation)
+    db.commit()
+
+    return Response(status_code=204)
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
