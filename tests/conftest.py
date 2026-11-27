@@ -5,7 +5,11 @@ import time
 import pytest
 from playwright.sync_api import sync_playwright
 import requests
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
+from main import app
+from app.database import Base, engine, get_db
 @pytest.fixture(scope='session')
 def fastapi_server():
     """
@@ -72,3 +76,30 @@ def page(browser):
     page = browser.new_page()
     yield page
     page.close()
+
+
+@pytest.fixture
+def client_and_db():
+    Base.metadata.create_all(bind=engine)
+
+    connection = engine.connect()
+    transaction = connection.begin()
+
+    db = Session(
+        bind=connection,
+        join_transaction_mode="create_savepoint",
+    )
+
+    def override_get_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    try:
+        with TestClient(app) as client:
+            yield client, db
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        db.close()
+        transaction.rollback()
+        connection.close()

@@ -11,7 +11,7 @@ from app.models import User
 from app.security import verify_password
 
 
-@pytest.fixture
+
 def client_and_db():
     Base.metadata.create_all(bind=engine)
 
