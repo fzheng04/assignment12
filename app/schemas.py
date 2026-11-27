@@ -28,7 +28,9 @@ class UserRead(BaseModel):
     email: EmailStr
     created_at: datetime
 
-
+class UserLogin(BaseModel):
+    username: str = Field(min_length=3, max_length=50)
+    password: str = Field(min_length=8, max_length=128)
 class CalculationType(str, Enum):
     ADD = "add"
     SUBTRACT = "subtract"

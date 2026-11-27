@@ -15,8 +15,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.database import get_db
 from app.models import User
-from app.schemas import UserCreate, UserRead
-from app.security import hash_password
+from app.schemas import UserCreate, UserRead, UserLogin
+from app.security import hash_password, verify_password
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -123,7 +123,8 @@ async def divide_route(operation: OperationRequest):
         logger.error(f"Divide Operation Internal Error: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
-@app.post("/users", response_model=UserRead, status_code=201)
+@app.post("/users", response_model=UserRead, status_code=201, include_in_schema=False)
+@app.post("/users/register", response_model=UserRead, status_code=201)
 def create_user(
     user_data: UserCreate,
     db: Session = Depends(get_db),
@@ -151,6 +152,28 @@ def create_user(
 
     return new_user
 
+
+@app.post("/users/login", response_model=UserRead)
+def login_user(
+    user_data: UserLogin,
+    db: Session = Depends(get_db),
+):
+    """Verify user login credentials."""
+
+    user = db.query(User).filter_by(
+        username=user_data.username
+    ).first()
+
+    if user is None or not verify_password(
+        user_data.password,
+        user.password_hash,
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password",
+        )
+
+    return user
 
 @app.get("/health")
 def health_check():
